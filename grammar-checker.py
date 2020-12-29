@@ -3,6 +3,7 @@ import os
 import sys
 import parglare
 import inspect
+from collections import Counter
 
 class GrammarProperty:
     def __init__(self, name):
@@ -105,15 +106,18 @@ class GrammarChecker:
         
         self.CHECKED = False
         self.grammar = None
+        self.check_realizable_dict = None
+        self.sus_cycle = []
         if len(args) > 0:
             self.grammar = args[0]
+            
 
     def check_reachable(self):
         reachable = []
         reachable = self.find_reachable(self.grammar.productions[0])
+        reachable.append(self.grammar.nonterminals["S'"]) # S' as the start symbol is obviously reachable
         terms = self.grammar.terminals
         non_terms = self.grammar.nonterminals
-        del non_terms["S'"] # Delete default start symbol - obviously reachable
         
         for term in terms.values():
             if term not in reachable:
@@ -140,17 +144,82 @@ class GrammarChecker:
         return reachable
       
     def check_realizable(self):
-        self.GRAMMAR_PROPERTIES.invalidate("REALIZABLE", str(inspect.stack()[0][3]) + " unimplemented")
         non_terms = self.grammar.nonterminals
-        for non_term in non_terms.values():
-            for production in non_term.productions:
-                print(str(non_term) + ": ")
-                for symbol in production.rhs:
-                    print(symbol)
+        for non_term in non_terms:
+            self.is_realizable(non_term)
+            self.check_realizable_dict["S'"] = True
+            # Assume the start symbol is realizable - as long as the chain from the start
+            # symbol is (i.e: the actual start symbol defined in the grammar file), 
+            # it should be, and if it isn't; it will be caught somewhere else.
+            # Also, it makes the code work.
+        for non_term in self.check_realizable_dict:
+            if self.check_realizable_dict[non_term] == False:
+                self.GRAMMAR_PROPERTIES.invalidate("REALIZABLE", "Non-terminal " + non_term + " is not realizable.")
         
+    def is_realizable(self, non_term):
+        if self.check_realizable_dict is None:
+            self.check_realizable_dict = {}
+        elif non_term in self.check_realizable_dict:
+            return self.check_realizable_dict[non_term]
+        self.check_realizable_dict[non_term] = False
+        realizable = False
+        for production in self.grammar.nonterminals[non_term].productions:
+            production_realizable = True
+            for symbol in production.rhs:
+                if isinstance(symbol, parglare.grammar.NonTerminal):
+                    symbol_realizable = self.is_realizable(symbol.name)
+                    if symbol_realizable == False:
+                        production_realizable = False
+            if realizable == False and production_realizable == True:
+                realizable = True
+        if non_term in self.check_realizable_dict:
+            if self.check_realizable_dict[non_term] == False and realizable == True:
+                self.check_realizable_dict[non_term] = realizable
+        else:
+            self.check_realizable_dict[non_term] = realizable
+        return realizable
+            
     def check_non_cyclic(self):
         self.GRAMMAR_PROPERTIES.invalidate("NON_CYCLIC", str(inspect.stack()[0][3]) + " unimplemented")
+        for non_term in self.grammar.nonterminals:
+            self.sus_cycle = []
+            chain = self.is_cyclic(non_term)
+            print(chain)
+            if len(chain) > 1:
+                chain_link = "->"
+                self.GRAMMAR_PROPERTIES.invalidate("NON_CYCLIC", "Non-terminal " + non_term + " has a cyclic chain " + chain_link.join(chain))
+    
+    def is_cyclic(self, non_term):
+        tree = {non_term: {}}
+        started_productions = []
+        self.grammar_tree(non_term, tree=tree, started_productions=started_productions)
+        chain = []    
+        return chain
         
+    def grammar_tree(self, non_term, tree=None, started_productions=None, root=None):
+        if tree is None:
+            tree = {non_term: {}}
+        if root is None:
+            root = tree
+        print(root)
+        if non_term not in started_productions:
+            started_productions.append(non_term)
+        if started_productions is None:
+            started_productions = []
+        if non_term in self.grammar.nonterminals:
+            for production in self.grammar.nonterminals[non_term].productions:
+                for symbol in production.rhs:
+                    if symbol.name not in started_productions:
+                        started_productions.append(symbol.name)
+                    if non_term == symbol.name:
+                        tree[non_term][symbol.name] = "Recursion"
+                    elif symbol.name in self.grammar.nonterminals:
+                        tree[non_term][symbol.name] = self.grammar_tree(symbol.name, tree=None, started_productions=started_productions, root=root)
+                    else:
+                        tree[non_term][symbol.name] = "Terminal"
+        return tree
+        
+    
     def check_null_unambig(self):
         self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")        
 
