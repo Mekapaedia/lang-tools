@@ -212,7 +212,15 @@ class GrammarChecker:
         return chain
     
     def check_null_unambig(self):
-        self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")        
+        self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")
+        nullable_productions = {}
+        for production in self.grammar.productions:
+            nullable_productions[production.symbol.name] = False
+            for symbol in production.rhs:
+                if symbol.name == "EMPTY":
+                    nullable_productions[production.symbol.name] = True
+        print(nullable_productions)
+                    
 
     def check_unambig(self):
         self.GRAMMAR_PROPERTIES.invalidate("UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")
