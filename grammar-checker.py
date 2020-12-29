@@ -107,7 +107,6 @@ class GrammarChecker:
         self.CHECKED = False
         self.grammar = None
         self.check_realizable_dict = None
-        self.sus_cycle = []
         if len(args) > 0:
             self.grammar = args[0]
             
@@ -180,45 +179,37 @@ class GrammarChecker:
         return realizable
             
     def check_non_cyclic(self):
-        self.GRAMMAR_PROPERTIES.invalidate("NON_CYCLIC", str(inspect.stack()[0][3]) + " unimplemented")
         for non_term in self.grammar.nonterminals:
-            self.sus_cycle = []
-            chain = self.is_cyclic(non_term)
-            print(chain)
-            if len(chain) > 1:
+            search_term = non_term
+            chain = self.is_cyclic(search_term)
+            if chain is not None and len(chain) > 1:
                 chain_link = "->"
                 self.GRAMMAR_PROPERTIES.invalidate("NON_CYCLIC", "Non-terminal " + non_term + " has a cyclic chain " + chain_link.join(chain))
     
-    def is_cyclic(self, non_term):
-        tree = {non_term: {}}
-        started_productions = []
-        self.grammar_tree(non_term, tree=tree, started_productions=started_productions)
-        chain = []    
+    def is_cyclic(self, search_term, curr_term=None, search_chain=None):
+        chain = []
+        if search_term not in self.grammar.nonterminals:
+            return []
+        if curr_term is None:
+            curr_term = search_term
+        if curr_term not in self.grammar.nonterminals:
+            return []
+        if search_chain is None:
+            search_chain = []
+        search_chain.append(curr_term)
+        for production in self.grammar.nonterminals[curr_term].productions:
+            for symbol in production.rhs:
+                ignore_symbol = False
+                if symbol.name == search_term or (len(search_chain) > 0 and symbol.name in search_chain):
+                    for is_terminal in production.rhs:
+                        if isinstance(is_terminal, parglare.grammar.Terminal):
+                            ignore_symbol = True
+                    if ignore_symbol == False:
+                        search_chain.append(symbol.name)       
+                        return search_chain
+                elif symbol.name in self.grammar.nonterminals:
+                    return self.is_cyclic(search_term, curr_term=symbol.name, search_chain=search_chain)
         return chain
-        
-    def grammar_tree(self, non_term, tree=None, started_productions=None, root=None):
-        if tree is None:
-            tree = {non_term: {}}
-        if root is None:
-            root = tree
-        print(root)
-        if non_term not in started_productions:
-            started_productions.append(non_term)
-        if started_productions is None:
-            started_productions = []
-        if non_term in self.grammar.nonterminals:
-            for production in self.grammar.nonterminals[non_term].productions:
-                for symbol in production.rhs:
-                    if symbol.name not in started_productions:
-                        started_productions.append(symbol.name)
-                    if non_term == symbol.name:
-                        tree[non_term][symbol.name] = "Recursion"
-                    elif symbol.name in self.grammar.nonterminals:
-                        tree[non_term][symbol.name] = self.grammar_tree(symbol.name, tree=None, started_productions=started_productions, root=root)
-                    else:
-                        tree[non_term][symbol.name] = "Terminal"
-        return tree
-        
     
     def check_null_unambig(self):
         self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")        
