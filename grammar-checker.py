@@ -20,7 +20,7 @@ class GrammarProperty:
         print(self.name + ": " + str(self.valid))
         if(self.valid == False):
             for reason in self.invalid_reasons:
-                print("Failure: " + reason)
+                    print("Reason: " + reason)
 
 class GrammarPropList:
     def __init__(self):
@@ -212,15 +212,68 @@ class GrammarChecker:
         return chain
     
     def check_null_unambig(self):
-        self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")
-        nullable_productions = {}
-        for production in self.grammar.productions:
-            nullable_productions[production.symbol.name] = False
-            for symbol in production.rhs:
-                if symbol.name == "EMPTY":
-                    nullable_productions[production.symbol.name] = True
-        print(nullable_productions)
-                    
+        nullable_symbols = []
+        for non_term in self.grammar.nonterminals:
+            new_nullable_symbols = self.is_nullable_symbol(non_term, nullable_symbols)
+            for symbol in new_nullable_symbols:
+                if symbol not in nullable_symbols:
+                    nullable_symbols.append(symbol)
+        nullable_symbols = list(dict.fromkeys(nullable_symbols)) # remove dupes
+        for nullable_symbol in nullable_symbols:
+            productions = self.grammar.nonterminals[nullable_symbol].productions
+            nullable_productions = []
+            for production in productions:
+                this_production_nullable = True
+                for symbol in production.rhs:
+                    if len(production.rhs) == 0:
+                        this_production_nullable = True
+                    elif isinstance(symbol, parglare.grammar.Terminal):
+                        this_production_nullable = False
+                    elif symbol.name not in nullable_symbols:
+                        this_production_nullable = False
+                if this_production_nullable == True:
+                    nullable_productions.append(production)
+            if len(nullable_productions) > 1:
+                null_ambig_str = ""
+                null_ambig_prod_num = len(nullable_productions)
+                null_ambig_prod_prod_cnt = 0
+                for nullable_production in nullable_productions: # This formatting loop is kinda ugly but it works
+                    null_ambig_str += nullable_symbol
+                    null_ambig_str += " -> "
+                    null_ambig_str += str(nullable_production.rhs)
+                    if null_ambig_prod_prod_cnt < null_ambig_prod_num - 1:
+                        null_ambig_str += " and "
+                    null_ambig_prod_prod_cnt += 1
+                self.GRAMMAR_PROPERTIES.invalidate("NULL_UNAMBIG", "Non-terminal " + nullable_symbol + " has an ambigously nullable productions " + null_ambig_str)
+
+    def is_nullable_symbol(self, symbol, nullable_symbols, symbol_chain=None):
+        if symbol_chain is None:
+            symbol_chain = [symbol]
+        elif symbol in symbol_chain:
+            return nullable_symbols
+        else:
+            symbol_chain.append(symbol)
+        if symbol not in self.grammar.nonterminals or symbol in nullable_symbols:
+            return nullable_symbols
+        for production in self.grammar.nonterminals[symbol].productions:
+            if len(production.rhs) == 0:
+                if symbol not in nullable_symbols:
+                    nullable_symbols.append(symbol)
+                return nullable_symbols
+            all_nullable = True
+            for production_symbol in production.rhs:
+                if production_symbol.name not in nullable_symbols:
+                    new_nullable = self.is_nullable_symbol(production_symbol.name, nullable_symbols, symbol_chain=symbol_chain)
+                    if production_symbol.name in new_nullable:
+                        nullable_symbols.append(production_symbol.name)
+                    else:
+                        all_nullable = False
+                    for new_nullable_symbol in new_nullable:
+                        if new_nullable_symbol not in nullable_symbols:
+                            nullable_symbols.append(new_nullable_symbol)
+            if all_nullable == True:
+                nullable_symbols.append(symbol)
+        return nullable_symbols
 
     def check_unambig(self):
         self.GRAMMAR_PROPERTIES.invalidate("UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")
