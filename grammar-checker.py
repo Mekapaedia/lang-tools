@@ -93,6 +93,7 @@ class GrammarChecker:
         self.GRAMMAR_PROPERTIES.add_prop("IS_LALR_1")
         
         self.GRAMMAR_PROPERTIES.add_deps("REALIZABLE", "REACHABLE")
+        self.GRAMMAR_PROPERTIES.add_deps("UNAMBIG", "NULL_UNAMBIG")
         self.GRAMMAR_PROPERTIES.add_deps("IS_RECURSIVE_DECENT", "REACHABLE", "REALIZABLE", "NON_CYCLIC", "NULL_UNAMBIG", "UNAMBIG")
         self.GRAMMAR_PROPERTIES.add_deps("IS_REGULAR", "REACHABLE", "REALIZABLE", "NON_CYCLIC", "NULL_UNAMBIG", "UNAMBIG")
         self.GRAMMAR_PROPERTIES.add_deps("IS_LL_1", "REACHABLE", "REALIZABLE", "NON_CYCLIC", "NULL_UNAMBIG", "UNAMBIG")
@@ -277,6 +278,28 @@ class GrammarChecker:
 
     def check_unambig(self):
         self.GRAMMAR_PROPERTIES.invalidate("UNAMBIG", str(inspect.stack()[0][3]) + " unimplemented")
+        for production in self.grammar.productions:
+            if production.symbol.name == "S'":
+                continue
+            sentences = self.get_sentences(production.rhs)
+            print(str(production) + ": " + str(sentences))
+        
+    def get_sentences(self, symbol_list, chain=None):
+        all_term = True
+        sentence = ""
+        for symbol in symbol_list:
+            if isinstance(symbol, parglare.grammar.Terminal):
+                if symbol.name != "EMPTY":
+                    sentence += symbol.name
+            else:
+                all_term = False
+                if chain is None:
+                    chain = [symbol]
+                elif symbol in chain:
+                    return sentence
+                sentence += str(self.get_sentences([symbol], chain=chain))
+        return sentence
+        
         
     def check_recursive_decent(self):
         self.GRAMMAR_PROPERTIES.invalidate("IS_RECURSIVE_DECENT", str(inspect.stack()[0][3]) + " unimplemented")
